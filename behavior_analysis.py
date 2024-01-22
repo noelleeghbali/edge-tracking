@@ -27,7 +27,7 @@ def open_log(logfile):  # Generate a dataframe from the contents of a log file.
     first_time = df['timestamp'].iloc[0]
     df['seconds'] = (df['timestamp'] - first_time).dt.total_seconds()
 
-    # Create a binary column 'odor_on'; assignment depends on the which mass flow controller (mfc) is active
+    # Create a binary column 'odor_on'; assignment depends on the which mfc is active
     if (df['mfc2_stpt'] == 0).all():
         df['odor_on'] = df.mfc3_stpt > 0
     if (df['mfc3_stpt'] == 0).all():
