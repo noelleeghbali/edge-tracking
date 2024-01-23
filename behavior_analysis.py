@@ -89,10 +89,10 @@ def light_on_off(df):  # For an experiment dataframe, split the trajectory into 
     return d_total, d_on, d_off
 
 
-def exp_parameters(folder_path):  # For trials in an experiment, create variables for visualization
+def exp_parameters(folder_path):  # Create variables for visualization
 
     folder = folder_path
-    figure_folder = f'{folder}/traj'
+    figure_folder = f'{folder_path}/traj'
 
     # If a folder for storing figures does not exist, make one
     if not os.path.exists(figure_folder):
@@ -160,7 +160,7 @@ def trajectory_plotter(folder_path, strip_width, strip_length, xlim, ylim, hline
             continue
 
         # Create a figure and set the font to Arial
-        fig, axs = plt.subplots(1, 1, figsize=(6, 6))
+        fig, axs = plt.subplots(1, 1, figsize=(8, 8))
         plt.rcParams['font.family'] = 'sans-serif'
         plt.rcParams['font.sans-serif'] = 'Arial'
 
@@ -172,16 +172,17 @@ def trajectory_plotter(folder_path, strip_width, strip_length, xlim, ylim, hline
             plt.plot(df_odor['ft_posx'] - xo, df_odor['ft_posy'] - yo, color='#5946b2', label='odor on')
             plt.plot(df_light['ft_posx'] - xo, df_light['ft_posy'] - yo, color='#FF355E', label='light on')
             plt.gca().add_patch(patches.Rectangle((-strip_width / 2, 0), strip_width, strip_length, facecolor=plume_color, alpha=0.5))
-            savename = filename + '_odor_trajectory.png'
+            savename = filename + '_odor_trajectory.pdf'
 
         # In a light plume, plot the trajectroy when the animal is in the light
         elif plot_type == 'odorless':
             plt.plot(df_light['ft_posx'] - xo, df_light['ft_posy'] - yo, color='#ff355e', label='light on')
             plt.gca().add_patch(patches.Rectangle((-strip_width / 2, 0), strip_width, strip_length, facecolor=plume_color, edgecolor='lightgrey'))
-            savename = filename + '_strip_trajectory.png'
+            savename = filename + '_strip_trajectory.pdf'
 
-        for i in (1, len(hlines)):
-            plt.hlines(y=hlines[i - 1], xmin=-100, xmax=100, colors='k', linestyles='--')
+        if hlines is not None:
+            for i in (1, len(hlines)):
+                plt.hlines(y=hlines[i - 1], xmin=-100, xmax=100, colors='k', linestyles='--', linewidth=1)
 
         # Set axes, labels, and title
         plt.xlim(xlim)
@@ -203,9 +204,10 @@ def trajectory_plotter(folder_path, strip_width, strip_length, xlim, ylim, hline
             spine.set_edgecolor('black')
 
         # Save and show the plot
-        plt.show()
         if save:
             plt.savefig(os.path.join(figure_folder, savename))
+        else:
+            plt.show()
 
 
 def get_a_bout_calc(df, data_type):
