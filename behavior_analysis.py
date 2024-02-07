@@ -171,7 +171,7 @@ def trajectory_plotter(folder_path, strip_width, strip_length, xlim, ylim, hline
         if plot_type == 'odor':
             plt.plot(df_odor['ft_posx'] - xo, df_odor['ft_posy'] - yo, color='#5946b2', label='odor on')
             plt.plot(df_light['ft_posx'] - xo, df_light['ft_posy'] - yo, color='#FF355E', label='light on')
-            plt.gca().add_patch(patches.Rectangle((-strip_width / 2, 0), strip_width, strip_length, facecolor=plume_color, alpha=0.5))
+            plt.gca().add_patch(patches.Rectangle((-strip_width / 2, 0), strip_width, strip_length, facecolor=plume_color, alpha=0.3))
             savename = filename + '_odor_trajectory.pdf'
 
         # In a light plume, plot the trajectroy when the animal is in the light
