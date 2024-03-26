@@ -3,6 +3,8 @@ import numpy as np
 import scipy.stats as stats
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
+import matplotlib.colors as colors_mod
+import seaborn as sns
 import os
 
 
@@ -12,10 +14,12 @@ def open_pickle(filename):  # Open a pickle of preprocessed imaging data for a c
     # dictionaries with keys 'a1', 'd', 'di', 'do', 'ft', all with values storing dataframes
 
 
-def plot_trial_FF_odor(figure_folder, filename, lobes, colors, keyword=None):
-    # Load data
+def plot_FF_trajectory(figure_folder, filename, lobes, colors, strip_width, strip_length, xlim, ylim, hlines=[], save=False, keyword=None):
     data = open_pickle(filename)
     flylist_n = np.array(list(data.keys()))
+
+    if not os.path.exists(figure_folder):
+        os.makedirs(figure_folder)
 
     # Determine flies to plot
     if keyword is not None and 1 <= keyword <= len(flylist_n):
@@ -24,48 +28,162 @@ def plot_trial_FF_odor(figure_folder, filename, lobes, colors, keyword=None):
     else:
         # Plotting for all flies
         flies_to_plot = [(fly_key, this_fly) for fly_key, this_fly in enumerate(data.values(), start=1)]
-
+    
     # Plot data
     for fly_number, this_fly in flies_to_plot:
         # Assign the correct dataframe ('a1' is all the data collected)
         this_fly_all_data = this_fly['a1']
-
-        # Create a figure
-        fig, axs = plt.subplots(len(lobes), 1, figsize=(10, 2 * len(lobes)), sharex=True)
-
-        # Set the font to Arial for all text
+        
+        # Create a single figure
+        fig, axs = plt.subplots(1, len(lobes), figsize=(8 * len(lobes), 10))
         plt.rcParams['font.family'] = 'sans-serif'
         plt.rcParams['font.sans-serif'] = 'Arial'
 
+
         # Iterate through the lobes
         for i, (lobe, color) in enumerate(zip(lobes, colors)):
+            # Filter df to exp start
+            first_on_index = this_fly_all_data[this_fly_all_data['instrip']].index[0]
+            exp_df = this_fly_all_data.loc[first_on_index:] # This filters the dataframe
+            # Establish the plume origin, at first odor onset
+            xo = exp_df.iloc[0]['ft_posx']
+            yo = exp_df.iloc[0]['ft_posy']
+            
             # Assign FF (fluorescence) to the correct df column
-            FF = this_fly_all_data[lobe]
-            # Extract time
-            time = this_fly_all_data['relative_time']
-            # Plot FF over time
-            axs[i].plot(time, FF, color=color, linewidth=1)
-            axs[i].set_ylabel(f'{lobe} dF/F')
-            axs[i].grid(False)
+            FF = exp_df[lobe]
+            # Smooth fluorescence data
+            smoothed_FF = FF.rolling(window=10, min_periods=1).mean()
 
-            # Assign the correct dataframe ('di' is all the in odor data')
-            d_odor = this_fly['di']
-            for key, df in d_odor.items():
-                # Find the first and last timepoints of every bout
-                time_on = df['relative_time'].iloc[0]
-                time_off = df['relative_time'].iloc[-1]
-                # Block that time out
-                timestamp = time_off - time_on
-                # Add a rectangle highlight of the length of the odor stimulus to denote when odor is on
-                rectangle = patches.Rectangle((time_on, FF.min()), timestamp, FF.max() + 0.5, facecolor='#ff7f24', alpha=0.3)
-                axs[i].add_patch(rectangle)
+            # Define color map
+            cmap = plt.get_cmap('coolwarm')
 
-        # Set title with fly number
+            # Normalize FF to [0, 1] for colormap
+            min_FF = smoothed_FF.min()
+            max_FF = smoothed_FF.max()
+            range_FF = max_FF - min_FF
+            norm = colors_mod.Normalize(vmin=min_FF - 0.1 * range_FF, vmax=max_FF + 0.1 * range_FF)
+
+            # Plot the trajectory on the corresponding subplot
+            axs[i].scatter(exp_df['ft_posx'] - xo, exp_df['ft_posy'] - yo, c=smoothed_FF, cmap=cmap, norm=norm, s=8)
+
+            axs[i].add_patch(patches.Rectangle((-strip_width / 2, 0), strip_width, strip_length, facecolor='white', edgecolor='lightgrey', alpha=0.3))
+
+            if hlines is not None:
+                for j in range(len(hlines)):
+                    axs[i].hlines(y=hlines[j], xmin=-100, xmax=100, colors='k', linestyles='--', linewidth=1)
+            
+            title = f'fly {fly_number}'
+
+            # Set axes, labels, and title
+            axs[i].set_xlim(xlim)
+            axs[i].set_ylim(ylim)
+            axs[i].set_xlabel('x position', fontsize=14)
+            axs[i].set_ylabel('y position', fontsize=14)
+            axs[i].set_title(f'{title} {lobe} lobe', fontsize=14)
+
+            # Further customization
+            axs[i].tick_params(which='both', axis='both', labelsize=12, length=3, width=2, color='black', direction='out', left=True, bottom=True)
+            for pos in ['right', 'top']:
+                axs[i].spines[pos].set_visible(False)
+
+            for _, spine in axs[i].spines.items():
+                spine.set_linewidth(2)
+            for spine in axs[i].spines.values():
+                spine.set_edgecolor('black')
+
+        # Apply tight layout to the entire figure
+        fig.tight_layout()
+
+        # Save and show the plot
+        if save:
+            plt.suptitle(f'dF/F traj fly {fly_number}')
+            plt.savefig(os.path.join(figure_folder, f'FF_traj_{fly_number}'))
+        else:
+            plt.show()
+
+def plot_speed_trajectory(figure_folder, filename, strip_width, strip_length, xlim, ylim, hlines=[], save=False, keyword=None):
+    data = open_pickle(filename)
+    flylist_n = np.array(list(data.keys()))
+
+    if not os.path.exists(figure_folder):
+        os.makedirs(figure_folder)
+
+    # Determine flies to plot
+    if keyword is not None and 1 <= keyword <= len(flylist_n):
+        # Plotting for a specific fly
+        flies_to_plot = [(keyword, data[flylist_n[keyword - 1]])]
+    else:
+        # Plotting for all flies
+        flies_to_plot = [(fly_key, this_fly) for fly_key, this_fly in enumerate(data.values(), start=1)]
+    
+    # Plot data
+    for fly_number, this_fly in flies_to_plot:
+        # Assign the correct dataframe ('a1' is all the data collected)
+        this_fly_all_data = this_fly['a1']
+        
+        # Create a single figure
+        fig, axs = plt.subplots(1, 1, figsize=(8, 8))
+        plt.rcParams['font.family'] = 'sans-serif'
+        plt.rcParams['font.sans-serif'] = 'Arial'
+
+        # Filter df to exp start
+        first_on_index = this_fly_all_data[this_fly_all_data['instrip']].index[0]
+        exp_df = this_fly_all_data.loc[first_on_index:] # This filters the dataframe
+        # Establish the plume origin, at first odor onset
+        xo = exp_df.iloc[0]['ft_posx']
+        yo = exp_df.iloc[0]['ft_posy']
+            
+        # Assign FF (fluorescence) to the correct df column
+        FF = exp_df['speed']
+        # Smooth fluorescence data
+        smoothed_FF = FF.rolling(window=10, min_periods=1).mean()
+
+        # Define color map
+        cmap = plt.get_cmap('coolwarm')
+
+        # Normalize FF to [0, 1] for colormap
+        min_FF = smoothed_FF.min()
+        max_FF = smoothed_FF.max()
+        range_FF = max_FF - min_FF
+        norm = colors_mod.Normalize(vmin=min_FF - 0.1 * range_FF, vmax=max_FF + 0.1 * range_FF)
+
+        # Plot the trajectory on the corresponding subplot
+        axs.scatter(exp_df['ft_posx'] - xo, exp_df['ft_posy'] - yo, c=smoothed_FF, cmap=cmap, norm=norm, s=5)
+
+        axs.add_patch(patches.Rectangle((-strip_width / 2, 0), strip_width, strip_length, facecolor='white', edgecolor='lightgrey', alpha=0.3))
+
+        if hlines is not None:
+            for j in range(len(hlines)):
+                axs[i].hlines(y=hlines[j], xmin=-100, xmax=100, colors='k', linestyles='--', linewidth=1)
+            
         title = f'fly {fly_number}'
-        plt.suptitle(f'{title} trial dF/F')
-        plt.xlabel('time (sec)')
-        plt.savefig(os.path.join(figure_folder, f'{title}_FF_odor'))
-        plt.clf()
+
+        # Set axes, labels, and title
+        axs.set_xlim(xlim)
+        axs.set_ylim(ylim)
+        axs.set_xlabel('x position', fontsize=14)
+        axs.set_ylabel('y position', fontsize=14)
+        axs.set_title('speed', fontsize=14)
+
+        # Further customization
+        axs.tick_params(which='both', axis='both', labelsize=12, length=3, width=2, color='black', direction='out', left=True, bottom=True)
+        for pos in ['right', 'top']:
+            axs.spines[pos].set_visible(False)
+
+        for _, spine in axs.spines.items():
+            spine.set_linewidth(2)
+        for spine in axs.spines.values():
+            spine.set_edgecolor('black')
+
+        # Apply tight layout to the entire figure
+        fig.tight_layout()
+
+        # Save and show the plot
+        if save:
+            plt.savefig(os.path.join(figure_folder, f'speed_traj_{fly_number}'))
+        else:
+            plt.show()
+
 
 
 def plot_triggered_norm_FF(figure_folder, filename, lobes, colors, window_size=5, event_type='entry'):
@@ -109,7 +227,7 @@ def plot_triggered_norm_FF(figure_folder, filename, lobes, colors, window_size=5
                     time_aligned = time[window_mask] - time_on
                     # Plot fluorescence aligned to the event time
                     axs[i].plot(time_aligned, normalized_FF, color=color, alpha=0.1, linewidth=0.2)
-        
+
         # Customize the plot
         axs[i].set_title(lobe)
         axs[i].set_ylim(-3, 8)

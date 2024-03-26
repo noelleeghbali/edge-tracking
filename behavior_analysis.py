@@ -3,6 +3,8 @@ import numpy as np
 import math
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
+import matplotlib.animation as animation
+from PIL import Image
 import os
 import seaborn as sns
 
@@ -149,8 +151,12 @@ def exp_parameters(folder_path):  # Create variables for visualization
     return params_list
 
 
-def trajectory_plotter(folder_path, strip_width, strip_length, xlim, ylim, hlines=[], select_file=None, plot_type='odor', save=False):
+def trajectory_plotter(folder_path, strip_width, strip_length, plume_start, xlim, ylim, led, hlines=[], select_file=None, plot_type='odor', save=False):
     params_list = exp_parameters(folder_path)
+    if led == 'red':
+        ledc = '#ff355e'
+    elif led == 'green':
+        ledc = '#0bda51'
 
     for this_experiment in params_list:
         figure_folder, filename, df_odor, df_light, exp_df, xo, yo, plume_color = this_experiment
@@ -160,24 +166,23 @@ def trajectory_plotter(folder_path, strip_width, strip_length, xlim, ylim, hline
             continue
 
         # Create a figure and set the font to Arial
-        fig, axs = plt.subplots(1, 1, figsize=(8, 8))
+        fig, axs = plt.subplots(1, 1, figsize=(10, 10))
         plt.rcParams['font.family'] = 'sans-serif'
         plt.rcParams['font.sans-serif'] = 'Arial'
 
-        # Plot the animal's unfiltered trajectory
-        plt.plot(exp_df['ft_posx'] - xo, exp_df['ft_posy'] - yo, color='#eeaeee', label='trajectory')
-
         # In an odor plume, plot the trajectory when the animal is in the odor
         if plot_type == 'odor':
-            plt.plot(df_odor['ft_posx'] - xo, df_odor['ft_posy'] - yo, color='#5946b2', label='odor on')
-            plt.plot(df_light['ft_posx'] - xo, df_light['ft_posy'] - yo, color='#FF355E', label='light on')
-            plt.gca().add_patch(patches.Rectangle((-strip_width / 2, 0), strip_width, strip_length, facecolor=plume_color, alpha=0.3))
+            plt.plot(exp_df['ft_posx'] - xo, exp_df['ft_posy'] - yo, color='lightgrey', label='clean air')
+            plt.plot(df_odor['ft_posx'] - xo, df_odor['ft_posy'] - yo, color='#5946b2', label='odor only')
+            plt.plot(df_light['ft_posx'] - xo, df_light['ft_posy'] - yo, color=ledc, label='light on')
+            plt.gca().add_patch(patches.Rectangle((-strip_width / 2, plume_start), strip_width, strip_length, facecolor=plume_color, alpha=0.3))
             savename = filename + '_odor_trajectory.pdf'
 
         # In a light plume, plot the trajectroy when the animal is in the light
         elif plot_type == 'odorless':
-            plt.plot(df_light['ft_posx'] - xo, df_light['ft_posy'] - yo, color='#ff355e', label='light on')
-            plt.gca().add_patch(patches.Rectangle((-strip_width / 2, 0), strip_width, strip_length, facecolor=plume_color, edgecolor='lightgrey'))
+            plt.plot(exp_df['ft_posx'] - xo, exp_df['ft_posy'] - yo, color='#48bf91', label='base trajectory')
+            plt.plot(df_light['ft_posx'] - xo, df_light['ft_posy'] - yo, color=ledc, label='light on')
+            plt.gca().add_patch(patches.Rectangle((-strip_width / 2, plume_start), strip_width, strip_length, facecolor=plume_color, edgecolor='lightgrey'))
             savename = filename + '_strip_trajectory.pdf'
 
         if hlines is not None:
@@ -187,9 +192,10 @@ def trajectory_plotter(folder_path, strip_width, strip_length, xlim, ylim, hline
         # Set axes, labels, and title
         plt.xlim(xlim)
         plt.ylim(ylim)
-        plt.xlabel('x position', fontsize=14)
-        plt.ylabel('y position', fontsize=14)
+        plt.legend()
         plt.title(filename, fontsize=14)
+        axs.set_xlabel('x-position (mm)', fontsize=14)
+        axs.set_ylabel('y-position (mm)', fontsize=14)
 
         # Further customization
         axs.tick_params(which='both', axis='both', labelsize=12, length=3, width=2, color='black', direction='out', left=True, bottom=True)
@@ -202,7 +208,81 @@ def trajectory_plotter(folder_path, strip_width, strip_length, xlim, ylim, hline
             spine.set_linewidth(2)
         for spine in axs.spines.values():
             spine.set_edgecolor('black')
+        
+        # Save and show the plot
+        if save:
+            plt.savefig(os.path.join(figure_folder, savename))
+        else:
+            plt.show()
 
+def trajectory_plotter_bw(folder_path, strip_width, strip_length, plume_start, xlim, ylim, led, hlines=[], select_file=None, plot_type='odor', save=False):
+    params_list = exp_parameters(folder_path)
+    if led == 'red':
+        ledc = '#ff355e'
+    elif led == 'green':
+        ledc = '#0bda51'
+
+    for this_experiment in params_list:
+        figure_folder, filename, df_odor, df_light, exp_df, xo, yo, plume_color = this_experiment
+
+        # If a file is specified and the current file is not the specified one, skip to the next iteration
+        if select_file and filename != select_file:
+            continue
+
+        # Create a figure and set the font to Arial
+        fig, axs = plt.subplots(1, 1, figsize=(10, 10))
+        plt.rcParams['font.family'] = 'sans-serif'
+        plt.rcParams['font.sans-serif'] = 'Arial'
+        fig.patch.set_facecolor('black')  # Set background to black
+        axs.set_facecolor('black')  # Set background of plotting area to black
+
+        
+        # Set font color to white
+        plt.rcParams['text.color'] = 'white'
+        plt.rcParams['axes.labelcolor'] = 'white'
+        plt.rcParams['xtick.color'] = 'white'
+        plt.rcParams['ytick.color'] = 'white'
+
+
+        # In an odor plume, plot the trajectory when the animal is in the odor
+        if plot_type == 'odor':
+            plt.plot(exp_df['ft_posx'] - xo, exp_df['ft_posy'] - yo, color='lightgrey', label='clean air')
+            # plt.plot(df_odor['ft_posx'] - xo, df_odor['ft_posy'] - yo, color='#5946b2', label='odor only')
+            # plt.plot(df_light['ft_posx'] - xo, df_light['ft_posy'] - yo, color=ledc, label='light on')
+            plt.gca().add_patch(patches.Rectangle((-strip_width / 2, plume_start), strip_width, strip_length, facecolor='grey', alpha=0.3))
+            savename = filename + '_odor_trajectory_bw.pdf'
+
+        # In a light plume, plot the trajectroy when the animal is in the light
+        elif plot_type == 'odorless':
+            plt.plot(exp_df['ft_posx'] - xo, exp_df['ft_posy'] - yo, color='#48bf91', label='base trajectory')
+            plt.plot(df_light['ft_posx'] - xo, df_light['ft_posy'] - yo, color=ledc, label='light on')
+            plt.gca().add_patch(patches.Rectangle((-strip_width / 2, plume_start), strip_width, strip_length, facecolor=plume_color, edgecolor='lightgrey'))
+            savename = filename + '_strip_trajectory_bw.pdf'
+
+        if hlines is not None:
+            for i in (1, len(hlines)):
+                plt.hlines(y=hlines[i - 1], xmin=-100, xmax=100, colors='k', linestyles='--', linewidth=1)
+
+        # Set axes, labels, and title
+        plt.xlim(xlim)
+        plt.ylim(ylim)
+        plt.legend()
+        plt.title(filename, fontsize=14)
+        axs.set_xlabel('x-position (mm)', fontsize=14)
+        axs.set_ylabel('y-position (mm)', fontsize=14)
+
+        # Further customization
+        axs.tick_params(which='both', axis='both', labelsize=12, length=3, width=2, color='black', direction='out', left=True, bottom=True)
+        for pos in ['right', 'top']:
+            axs.spines[pos].set_visible(False)
+        plt.tight_layout()
+        sns.despine(offset=10)
+
+        for _, spine in axs.spines.items():
+            spine.set_linewidth(2)
+        for spine in axs.spines.values():
+            spine.set_edgecolor('black')
+        
         # Save and show the plot
         if save:
             plt.savefig(os.path.join(figure_folder, savename))
@@ -217,6 +297,8 @@ def get_a_bout_calc(df, data_type):
     if data_type == 'duration':
         duration = df['timestamp'].iloc[-1] - df['timestamp'].iloc[0]
         return duration.total_seconds()
+    if data_type == 'avg_speed':
+        return df['speed'].mean()
     return None
 
 
@@ -313,7 +395,6 @@ def plot_histograms(folder_path, boutdf, plot_variable, group_variable, group_va
     plt.rcParams['font.sans-serif'] = 'Arial'
     plt.rcParams['font.family'] = 'sans-serif'
     sns.set_theme(style='whitegrid')
-    ax.grid(False)
     ax.tick_params(which='both', axis='both', labelsize=16, length=3, width=2, color='black', direction='out', left=True, bottom=True)
 
     for pos in ['right', 'top']:
@@ -329,4 +410,46 @@ def plot_histograms(folder_path, boutdf, plot_variable, group_variable, group_va
     # Save the plot
     if not os.path.exists(figure_folder):
         os.makedirs(figure_folder)
-    fig.savefig(os.path.join(figure_folder, title + '.png'))
+    fig.savefig(os.path.join(figure_folder, title + '.pdf'))
+
+
+def plot_scatter(folder_path, boutdf, plot_variable, group_variable, group_values, group_colors, title, x_label, y_label, x_limits=None):
+    figure_folder = f'{folder_path}/Figure'
+
+    fig, ax1 = plt.subplots(figsize=(8, 3))
+    sns.stripplot(data=boutdf, x=plot_variable, ax=ax1,
+                      y=group_variable, edgecolor='none', dodge=False,
+                      alpha=0.5, palette=group_colors, linewidth=0)
+
+    ax1.grid(False)
+    ax1.set_xlabel(x_label)
+    ax1.set_ylabel(y_label)
+    if x_limits:
+        ax1.set_xlim(x_limits)
+    ax1.set_yticks(range(1, len(boutdf[group_variable].unique()) + 1))
+    ax1.set_yticklabels([str(i) if i % 5 == 0 else '' for i in range(1, len(boutdf[group_variable].unique()) + 1)])
+
+    # Further customization for a cleaner look
+    for ax in fig.axes:
+        ax.tick_params(which='both', axis='both', labelsize=18, length=3, width=2, color='black', direction='out', left=False, bottom=False)
+        for pos in ['right', 'top']:
+            ax.spines[pos].set_visible(False)
+    plt.tight_layout()
+    sns.despine(offset=10)
+    for _, spine in ax1.spines.items():
+        spine.set_linewidth(2)
+    for spine in ax1.spines.values():
+        spine.set_edgecolor('black')
+
+    # Save the plot
+    if not os.path.exists(figure_folder):
+        os.makedirs(figure_folder)
+    fig.savefig(os.path.join(figure_folder, title + '.pdf'))
+
+def plot_circmean_heading(df, means_list):
+    x = df.ft_posx.to_numpy()
+    x = x - x[-1]
+    if np.abs(x[0] - x[-1]):
+        circmean_value = stats.circmean(df.ft_heading, low=-np.pi, high=np.pi, axis=None, nan_policy='omit')
+        means_list.append(circmean_value)
+        return circmean_value
